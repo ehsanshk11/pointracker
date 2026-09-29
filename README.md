@@ -52,7 +52,7 @@ Accessibility again after a rebuild. To avoid that, build with
 ## How it works
 
 ```
-Camera (640×480, 30 fps capture, 15 fps analysis)
+Camera (352×288, 15 fps) → FramePacer (2–15 fps analysis)
   → FaceTracker        Vision: yaw, pitch, face position/size, nose & pupil offsets
   → ScreenClassifier   Gaussian-weighted k-NN over calibration + click samples
   → FocusDecider       dwell, lead margin, cooldown, typing/mouse holds, face-loss grace
@@ -78,10 +78,12 @@ already under way still completes (`faceLossGrace`).
 
 ### CPU and battery
 
-- Frames are small, and Vision runs largely on the Neural Engine and GPU.
-- Frames are analysed at 15 fps only when a switch could happen. While you
-  type or use the mouse this drops to 5 fps, which is enough to keep timing
-  the dwell and to learn from clicks.
+- Vision is the main cost, so frames are small (352×288) and Vision is asked
+  to run on the Neural Engine.
+- Analysis runs at 15 fps only for a second after your head moves, or while
+  a switch is being timed. With your head still it drops to 7.5 fps, while
+  you type or use the mouse to 5 fps, and with nobody in view to 2 fps.
+- The menu shows the live analysis rate and milliseconds per frame.
 - The camera is stopped entirely when paused, on battery (if enabled), when
   locked or asleep, and when fewer than two displays are connected.
 - The camera light stays on while tracking. That is the nature of the

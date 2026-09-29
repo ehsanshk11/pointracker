@@ -1,7 +1,7 @@
 import Foundation
 
 /// Last keyboard and mouse activity, shared between the main thread (which
-/// records input) and the camera queue (which throttles frame processing).
+/// records input) and the camera queue (which slows analysis while held).
 public final class ActivityClock: @unchecked Sendable {
     private let lock = NSLock()
     private var mouse: TimeInterval?
@@ -45,23 +45,20 @@ public final class ActivityClock: @unchecked Sendable {
         return key
     }
 
-    /// Frames are only needed at full rate when a switch could happen. While
-    /// the user types or uses the mouse, a slower rate is enough to keep the
-    /// dwell clock running and a recent sample around for learning from clicks.
-    public func frameInterval(at time: TimeInterval, activeFPS: Double, heldFPS: Double) -> TimeInterval {
+    /// True while no focus switch may fire because the user is busy.
+    public func isHeld(at time: TimeInterval) -> Bool {
         lock.lock()
         let lastMouse = mouse
         let lastKey = key
         let mouseHold = self.mouseHold
         let typingHold = self.typingHold
         lock.unlock()
-        let held = FocusDecider.holdReason(
+        return FocusDecider.holdReason(
             at: time,
             lastMouse: lastMouse,
             lastKey: lastKey,
             mouseHold: mouseHold,
             typingHold: typingHold
         ) != nil
-        return 1 / (held ? heldFPS : activeFPS)
     }
 }

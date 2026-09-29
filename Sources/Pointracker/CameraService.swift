@@ -10,13 +10,14 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
         let name: String
     }
 
-    /// Capture runs at the camera's rate; analysis runs at `activeFPS` while
-    /// a switch could happen and `heldFPS` while the user types or uses the
-    /// mouse. Capture must be a multiple of analysis or frames get skipped
-    /// unevenly (15 fps capture with 12 fps analysis gave only 7.5 fps).
-    static let captureFPS = 30.0
-    static let activeFPS = 15.0
-    static let heldFPS = 5.0
+    /// Analysis rates (see FramePacer) are 15, 7.5, 5 and 2 fps: whole
+    /// divisors of the capture rate, so frames are skipped evenly.
+    static let captureFPS = 15.0
+
+    struct Stats: Equatable {
+        var analysedFPS: Double = 0
+        var millisecondsPerFrame: Double = 0
+    }
 
     /// Called on the main actor with each analysed frame (nil = no face).
     /// Set before calling `start`.
@@ -27,14 +28,27 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
     private let videoQueue = DispatchQueue(label: "pointracker.camera.video", qos: .userInitiated)
     private let tracker = FaceTracker()
     private let activity: ActivityClock
+    let pacer = FramePacer()
     // Session state: sessionQueue only.
     private var configuredDeviceID: String??
     // Frame throttling: videoQueue only.
     private var lastProcessed: TimeInterval = 0
+    private var windowStart: TimeInterval = 0
+    private var windowFrames = 0
+    private var windowMilliseconds = 0.0
+    // Published stats, readable from any thread.
+    private let statsLock = NSLock()
+    private var _stats = Stats()
 
     init(activity: ActivityClock) {
         self.activity = activity
         super.init()
+    }
+
+    var stats: Stats {
+        statsLock.lock()
+        defer { statsLock.unlock() }
+        return _stats
     }
 
     static var authorization: AVAuthorizationStatus {
@@ -82,10 +96,8 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
         session.inputs.forEach { session.removeInput($0) }
         session.outputs.forEach { session.removeOutput($0) }
         // Head pose needs very little resolution; small frames keep Vision cheap.
-        if session.canSetSessionPreset(.vga640x480) {
-            session.sessionPreset = .vga640x480
-        } else {
-            session.sessionPreset = .low
+        if let preset = [AVCaptureSession.Preset.cif352x288, .vga640x480, .low].first(where: session.canSetSessionPreset) {
+            session.sessionPreset = preset
         }
 
         let devices = Self.discovery().devices
@@ -136,17 +148,39 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
         from connection: AVCaptureConnection
     ) {
         let now = ProcessInfo.processInfo.systemUptime
-        let interval = activity.frameInterval(at: now, activeFPS: Self.activeFPS, heldFPS: Self.heldFPS)
+        let interval = pacer.interval(at: now, held: activity.isHeld(at: now))
         guard now - lastProcessed >= interval * 0.9 else { return }
         lastProcessed = now
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
         let sample = tracker.process(pixelBuffer, timestamp: now)
+        pacer.observe(sample, at: now)
+        recordStats(start: now, end: ProcessInfo.processInfo.systemUptime)
         let handler = onSample
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
                 handler?(sample)
             }
         }
+    }
+
+    private func recordStats(start: TimeInterval, end: TimeInterval) {
+        if windowStart == 0 {
+            windowStart = start
+        }
+        windowFrames += 1
+        windowMilliseconds += (end - start) * 1000
+        let elapsed = end - windowStart
+        guard elapsed >= 2 else { return }
+        let stats = Stats(
+            analysedFPS: Double(windowFrames) / elapsed,
+            millisecondsPerFrame: windowMilliseconds / Double(windowFrames)
+        )
+        windowStart = end
+        windowFrames = 0
+        windowMilliseconds = 0
+        statsLock.lock()
+        _stats = stats
+        statsLock.unlock()
     }
 }

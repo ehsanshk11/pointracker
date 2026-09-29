@@ -1,3 +1,4 @@
+import CoreML
 import CoreVideo
 import Foundation
 import PointrackerCore
@@ -9,12 +10,14 @@ final class FaceTracker {
     private let faceRequest: VNDetectFaceRectanglesRequest = {
         let request = VNDetectFaceRectanglesRequest()
         request.revision = VNDetectFaceRectanglesRequestRevision3
+        FaceTracker.preferNeuralEngine(request)
         return request
     }()
 
     private let landmarksRequest: VNDetectFaceLandmarksRequest = {
         let request = VNDetectFaceLandmarksRequest()
         request.revision = VNDetectFaceLandmarksRequestRevision3
+        FaceTracker.preferNeuralEngine(request)
         return request
     }()
 
@@ -51,6 +54,21 @@ final class FaceTracker {
             eyeOffset: eyeOffset,
             timestamp: timestamp
         )
+    }
+
+    /// Runs the models on the Neural Engine where Vision allows it, which
+    /// keeps them off the CPU cores.
+    private static func preferNeuralEngine(_ request: VNRequest) {
+        guard let stages = try? request.supportedComputeStageDevices() else { return }
+        for (stage, devices) in stages {
+            let neuralEngine = devices.first { device in
+                if case .neuralEngine = device { return true }
+                return false
+            }
+            if let neuralEngine {
+                request.setComputeDevice(neuralEngine, for: stage)
+            }
+        }
     }
 
     private func area(_ face: VNFaceObservation) -> CGFloat {

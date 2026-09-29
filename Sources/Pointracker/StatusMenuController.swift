@@ -11,6 +11,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let speedMenu: NSMenu
     private let stateItem: NSMenuItem
     private let liveItem: NSMenuItem
+    private let performanceItem: NSMenuItem
     private let pauseItem: NSMenuItem
     private let batteryItem: NSMenuItem
     private let learnItem: NSMenuItem
@@ -27,6 +28,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         speedMenu = NSMenu()
         stateItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         liveItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        performanceItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         pauseItem = NSMenuItem(title: "Pause", action: #selector(togglePause), keyEquivalent: "g")
         batteryItem = NSMenuItem(title: "Pause on Battery", action: #selector(toggleBattery), keyEquivalent: "")
         learnItem = NSMenuItem(title: "Learn from Clicks", action: #selector(toggleLearn), keyEquivalent: "")
@@ -41,6 +43,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private func build() {
         stateItem.isEnabled = false
         liveItem.isEnabled = false
+        performanceItem.isEnabled = false
         pauseItem.keyEquivalentModifierMask = [.command, .shift]
 
         let cameraItem = NSMenuItem(title: "Camera", action: nil, keyEquivalent: "")
@@ -71,6 +74,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
 
         menu.addItem(stateItem)
         menu.addItem(liveItem)
+        menu.addItem(performanceItem)
         menu.addItem(.separator())
         menu.addItem(pauseItem)
         menu.addItem(calibrateItem)
@@ -116,6 +120,9 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     func updateLive() {
         guard isMenuOpen else { return }
         liveItem.title = app.liveText
+        let performance = app.performanceText
+        performanceItem.title = performance
+        performanceItem.isHidden = performance.isEmpty
     }
 
     // MARK: - NSMenuDelegate

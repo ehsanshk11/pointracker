@@ -123,6 +123,12 @@ final class AppController: NSObject {
         return text
     }
 
+    var performanceText: String {
+        guard cameraRunning else { return "" }
+        let stats = camera.stats
+        return String(format: "Analysing %.1f fps · %.1f ms per frame", stats.analysedFPS, stats.millisecondsPerFrame)
+    }
+
     // MARK: - Actions
 
     func toggleUserPause() {
@@ -195,6 +201,7 @@ final class AppController: NSObject {
         guard cameraRunning else { return }
         if let sample { lastSample = sample }
         if let calibration {
+            camera.pacer.keepActive(until: ProcessInfo.processInfo.systemUptime + 0.5)
             calibration.ingest(sample)
             return
         }
@@ -212,6 +219,10 @@ final class AppController: NSObject {
             lastKeyActivity: activity.lastKey
         ))
         lastOutput = output
+        if case .tracking = output {
+            // A switch is being timed: keep analysing at full rate.
+            camera.pacer.keepActive(until: ProcessInfo.processInfo.systemUptime + 0.5)
+        }
         if case .switchTo(let id) = output, let target = screens.screen(for: id) {
             focus.focus(target, screens: screens, movePointer: settings.movePointer)
             currentScreen = id

@@ -68,13 +68,61 @@ final class SampleStoreTests: XCTestCase {
 }
 
 final class ActivityClockTests: XCTestCase {
-    func testSlowsDownWhileUserIsBusy() {
+    func testHeldAfterMouseAndTyping() {
         let clock = ActivityClock(mouseHold: 1.5, typingHold: 0.6)
-        XCTAssertEqual(clock.frameInterval(at: 10, activeFPS: 12, heldFPS: 4), 1.0 / 12, accuracy: 1e-9)
+        XCTAssertFalse(clock.isHeld(at: 10))
         clock.noteMouse(at: 10)
-        XCTAssertEqual(clock.frameInterval(at: 11, activeFPS: 12, heldFPS: 4), 0.25, accuracy: 1e-9)
-        XCTAssertEqual(clock.frameInterval(at: 12, activeFPS: 12, heldFPS: 4), 1.0 / 12, accuracy: 1e-9)
+        XCTAssertTrue(clock.isHeld(at: 11))
+        XCTAssertFalse(clock.isHeld(at: 12))
         clock.noteKey(at: 20)
-        XCTAssertEqual(clock.frameInterval(at: 20.3, activeFPS: 12, heldFPS: 4), 0.25, accuracy: 1e-9)
+        XCTAssertTrue(clock.isHeld(at: 20.3))
+        clock.setHolds(mouse: 1.5, typing: 0.2)
+        XCTAssertFalse(clock.isHeld(at: 20.3))
+    }
+}
+
+final class FramePacerTests: XCTestCase {
+    let rates = FramePacer.Rates()
+
+    func testStillHeadDropsToSettledRate() {
+        let pacer = FramePacer()
+        pacer.observe(FaceSample(yaw: 0, pitch: 0), at: 0)
+        XCTAssertEqual(pacer.interval(at: 0.5, held: false), 1 / rates.active, accuracy: 1e-9)
+        pacer.observe(FaceSample(yaw: 1, pitch: -1), at: 0.8)
+        XCTAssertEqual(pacer.interval(at: 1.2, held: false), 1 / rates.settled, accuracy: 1e-9)
+    }
+
+    func testMovementRestoresActiveRate() {
+        let pacer = FramePacer()
+        pacer.observe(FaceSample(yaw: 0, pitch: 0), at: 0)
+        XCTAssertEqual(pacer.interval(at: 2, held: false), 1 / rates.settled, accuracy: 1e-9)
+        pacer.observe(FaceSample(yaw: 6, pitch: 0), at: 2)
+        XCTAssertEqual(pacer.interval(at: 2.1, held: false), 1 / rates.active, accuracy: 1e-9)
+    }
+
+    func testSlowDriftEventuallyCountsAsMotion() {
+        let pacer = FramePacer()
+        pacer.observe(FaceSample(yaw: 0, pitch: 0), at: 0)
+        pacer.observe(FaceSample(yaw: 1.5, pitch: 0), at: 2)
+        XCTAssertEqual(pacer.interval(at: 2.1, held: false), 1 / rates.settled, accuracy: 1e-9)
+        pacer.observe(FaceSample(yaw: 3, pitch: 0), at: 3)
+        XCTAssertEqual(pacer.interval(at: 3.1, held: false), 1 / rates.active, accuracy: 1e-9)
+    }
+
+    func testFaceLossIsActiveThenAbsent() {
+        let pacer = FramePacer()
+        pacer.observe(FaceSample(yaw: 0, pitch: 0), at: 0)
+        pacer.observe(nil, at: 5)
+        XCTAssertEqual(pacer.interval(at: 5.5, held: false), 1 / rates.active, accuracy: 1e-9)
+        pacer.observe(nil, at: 6)
+        XCTAssertEqual(pacer.interval(at: 7, held: false), 1 / rates.absent, accuracy: 1e-9)
+    }
+
+    func testHeldAndKeepActive() {
+        let pacer = FramePacer()
+        pacer.observe(FaceSample(yaw: 0, pitch: 0), at: 0)
+        XCTAssertEqual(pacer.interval(at: 0.1, held: true), 1 / rates.held, accuracy: 1e-9)
+        pacer.keepActive(until: 3)
+        XCTAssertEqual(pacer.interval(at: 2.5, held: false), 1 / rates.active, accuracy: 1e-9)
     }
 }
