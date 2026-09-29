@@ -32,7 +32,7 @@ final class AppController: NSObject {
 
     override init() {
         settings = Settings()
-        let config = settings.deciderConfig
+        let config = settings.switchSpeed.config
         activity = ActivityClock(mouseHold: config.mouseHold, typingHold: config.typingHold)
         camera = CameraService(activity: activity)
         focus = FocusController()
@@ -132,6 +132,14 @@ final class AppController: NSObject {
     func setPauseOnBattery(_ enabled: Bool) {
         settings.pauseOnBattery = enabled
         applyPower(power.isOnBattery)
+    }
+
+    func setSwitchSpeed(_ speed: SwitchSpeed) {
+        settings.switchSpeed = speed
+        let config = speed.config
+        decider.config = config
+        activity.setHolds(mouse: config.mouseHold, typing: config.typingHold)
+        menu?.refresh()
     }
 
     func selectCamera(_ id: String) {

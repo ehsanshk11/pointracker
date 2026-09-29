@@ -17,7 +17,9 @@ window or split pane within one screen is still to do (see [Roadmap](#roadmap)).
 - [x] Guided calibration: 5 dots per screen and a report on how well the screens can be told apart.
 - [x] Learns from clicks: each click on a calibrated screen becomes a training sample.
 - [x] A 300 ms dwell, a clear lead over the current screen, and a cooldown between switches.
-- [x] No switching while typing (0.6 s) or using the mouse (1.5 s).
+- [x] No switching while typing (0.6 s) or using the mouse (1.5 s). The dwell keeps timing
+      during these holds, so if you are already facing another screen, focus moves the moment the hold ends.
+- [x] **Switch Speed** menu: Fast (150 ms, 0.8 s after mouse), Normal (300 ms, 1.5 s) or Relaxed (500 ms, 2 s).
 - [x] Focuses the last-used window on the target screen through Accessibility; it never clicks.
 - [x] Can bring the pointer along, back to where it last was on that screen.
 - [x] **Pauses while running on battery** (on by default).
@@ -50,7 +52,7 @@ Accessibility again after a rebuild. To avoid that, build with
 ## How it works
 
 ```
-Camera (640×480, ≤15 fps)
+Camera (640×480, 30 fps capture, 15 fps analysis)
   → FaceTracker        Vision: yaw, pitch, face position/size, nose & pupil offsets
   → ScreenClassifier   Gaussian-weighted k-NN over calibration + click samples
   → FocusDecider       dwell, lead margin, cooldown, typing/mouse holds, face-loss grace
@@ -77,8 +79,9 @@ already under way still completes (`faceLossGrace`).
 ### CPU and battery
 
 - Frames are small, and Vision runs largely on the Neural Engine and GPU.
-- Frames are processed at 12 fps only when a switch could happen. While you
-  type or use the mouse this drops to 4 fps, just enough to learn from clicks.
+- Frames are analysed at 15 fps only when a switch could happen. While you
+  type or use the mouse this drops to 5 fps, which is enough to keep timing
+  the dwell and to learn from clicks.
 - The camera is stopped entirely when paused, on battery (if enabled), when
   locked or asleep, and when fewer than two displays are connected.
 - The camera light stays on while tracking. That is the nature of the

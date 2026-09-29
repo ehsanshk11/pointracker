@@ -6,12 +6,19 @@ public final class ActivityClock: @unchecked Sendable {
     private let lock = NSLock()
     private var mouse: TimeInterval?
     private var key: TimeInterval?
-    public let mouseHold: TimeInterval
-    public let typingHold: TimeInterval
+    private var mouseHold: TimeInterval
+    private var typingHold: TimeInterval
 
     public init(mouseHold: TimeInterval, typingHold: TimeInterval) {
         self.mouseHold = mouseHold
         self.typingHold = typingHold
+    }
+
+    public func setHolds(mouse: TimeInterval, typing: TimeInterval) {
+        lock.lock()
+        mouseHold = mouse
+        typingHold = typing
+        lock.unlock()
     }
 
     public func noteMouse(at time: TimeInterval) {
@@ -39,12 +46,14 @@ public final class ActivityClock: @unchecked Sendable {
     }
 
     /// Frames are only needed at full rate when a switch could happen. While
-    /// the user types or uses the mouse, a slow trickle is enough to keep a
-    /// recent sample around for learning from clicks.
+    /// the user types or uses the mouse, a slower rate is enough to keep the
+    /// dwell clock running and a recent sample around for learning from clicks.
     public func frameInterval(at time: TimeInterval, activeFPS: Double, heldFPS: Double) -> TimeInterval {
         lock.lock()
         let lastMouse = mouse
         let lastKey = key
+        let mouseHold = self.mouseHold
+        let typingHold = self.typingHold
         lock.unlock()
         let held = FocusDecider.holdReason(
             at: time,

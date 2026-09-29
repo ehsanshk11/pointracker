@@ -1,4 +1,5 @@
 import AppKit
+import PointrackerCore
 
 /// The eye icon in the menu bar and its menu.
 @MainActor
@@ -7,6 +8,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private let menu: NSMenu
     private let cameraMenu: NSMenu
+    private let speedMenu: NSMenu
     private let stateItem: NSMenuItem
     private let liveItem: NSMenuItem
     private let pauseItem: NSMenuItem
@@ -22,6 +24,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         menu = NSMenu()
         cameraMenu = NSMenu()
+        speedMenu = NSMenu()
         stateItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         liveItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         pauseItem = NSMenuItem(title: "Pause", action: #selector(togglePause), keyEquivalent: "g")
@@ -44,6 +47,20 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         cameraItem.submenu = cameraMenu
         cameraMenu.delegate = self
 
+        let speedItem = NSMenuItem(title: "Switch Speed", action: nil, keyEquivalent: "")
+        speedItem.submenu = speedMenu
+        for speed in SwitchSpeed.allCases {
+            let config = speed.config
+            let item = NSMenuItem(
+                title: "\(speed.title) — \(Int(config.dwell * 1000)) ms, waits \(config.mouseHold)s after mouse",
+                action: #selector(selectSpeed(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = speed.rawValue
+            speedMenu.addItem(item)
+        }
+
         let calibrateItem = NSMenuItem(title: "Calibrate…", action: #selector(calibrate), keyEquivalent: "")
         let resetItem = NSMenuItem(title: "Reset Calibration", action: #selector(resetCalibration), keyEquivalent: "")
         let quitItem = NSMenuItem(title: "Quit Pointracker", action: #selector(quit), keyEquivalent: "q")
@@ -58,6 +75,7 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         menu.addItem(pauseItem)
         menu.addItem(calibrateItem)
         menu.addItem(cameraItem)
+        menu.addItem(speedItem)
         menu.addItem(.separator())
         menu.addItem(batteryItem)
         menu.addItem(learnItem)
@@ -85,6 +103,10 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
         batteryItem.state = app.settings.pauseOnBattery ? .on : .off
         learnItem.state = app.settings.learnFromClicks ? .on : .off
         pointerItem.state = app.settings.movePointer ? .on : .off
+        let speed = app.settings.switchSpeed.rawValue
+        for item in speedMenu.items {
+            item.state = (item.representedObject as? String) == speed ? .on : .off
+        }
         accessibilityItem.isHidden = app.hasAccessibility
         cameraAccessItem.isHidden = app.hasCameraAccess
         updateLive()
@@ -142,6 +164,11 @@ final class StatusMenuController: NSObject, NSMenuDelegate {
     @objc private func selectCamera(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
         app.selectCamera(id)
+    }
+
+    @objc private func selectSpeed(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let speed = SwitchSpeed(rawValue: raw) else { return }
+        app.setSwitchSpeed(speed)
     }
 
     @objc private func toggleBattery() {

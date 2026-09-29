@@ -53,14 +53,38 @@ final class FocusDeciderTests: XCTestCase {
         var decider = FocusDecider()
         XCTAssertEqual(decider.step(input(1.0, looking(at: b), mouse: 0)), .holding(.mouse))
         XCTAssertEqual(decider.step(input(1.4, looking(at: b), mouse: 0)), .holding(.mouse))
-        XCTAssertEqual(decider.step(input(1.6, looking(at: b), mouse: 0)), .tracking(b, progress: 0))
-        XCTAssertEqual(decider.step(input(1.91, looking(at: b), mouse: 0)), .switchTo(b))
+        // Already facing b for longer than the dwell: switches the moment the hold ends.
+        XCTAssertEqual(decider.step(input(1.6, looking(at: b), mouse: 0)), .switchTo(b))
+    }
+
+    func testTurningAtEndOfHoldStillNeedsFullDwell() {
+        var decider = FocusDecider()
+        XCTAssertEqual(decider.step(input(1.4, looking(at: b), mouse: 0)), .holding(.mouse))
+        XCTAssertEqual(decider.step(input(1.6, looking(at: b), mouse: 0)), .tracking(b, progress: (1.6 - 1.4) / 0.3))
+        XCTAssertEqual(decider.step(input(1.71, looking(at: b), mouse: 0)), .switchTo(b))
     }
 
     func testHoldsWhileTyping() {
         var decider = FocusDecider()
         XCTAssertEqual(decider.step(input(0.5, looking(at: b), key: 0)), .holding(.typing))
-        XCTAssertEqual(decider.step(input(0.7, looking(at: b), key: 0)), .tracking(b, progress: 0))
+        XCTAssertNotEqual(decider.step(input(0.7, looking(at: b), key: 0)), .switchTo(b))
+        XCTAssertEqual(decider.step(input(0.81, looking(at: b), key: 0)), .switchTo(b))
+    }
+
+    func testGlanceWhileTypingDoesNotStealFocus() {
+        var decider = FocusDecider()
+        // Reading the other screen for a moment mid-typing, then looking back.
+        XCTAssertEqual(decider.step(input(0.1, looking(at: b), key: 0)), .holding(.typing))
+        XCTAssertEqual(decider.step(input(0.4, looking(at: b), key: 0.3)), .holding(.typing))
+        XCTAssertEqual(decider.step(input(0.5, looking(at: a), key: 0.3)), .holding(.typing))
+        XCTAssertEqual(decider.step(input(1.0, looking(at: a), key: 0.3)), .idle)
+        XCTAssertNil(decider.candidate)
+    }
+
+    func testSpeedPresetsOrderDwell() {
+        XCTAssertLessThan(SwitchSpeed.fast.config.dwell, SwitchSpeed.normal.config.dwell)
+        XCTAssertLessThan(SwitchSpeed.normal.config.dwell, SwitchSpeed.relaxed.config.dwell)
+        XCTAssertEqual(SwitchSpeed.normal.config, DeciderConfig())
     }
 
     func testNeedsAClearLead() {

@@ -10,7 +10,7 @@ final class Settings {
         static let pauseOnBattery = "pauseOnBattery"
         static let learnFromClicks = "learnFromClicks"
         static let movePointer = "movePointer"
-        static let dwellMilliseconds = "dwellMilliseconds"
+        static let switchSpeed = "switchSpeed"
     }
 
     init() {
@@ -18,7 +18,7 @@ final class Settings {
             Key.pauseOnBattery: true,
             Key.learnFromClicks: true,
             Key.movePointer: true,
-            Key.dwellMilliseconds: 300,
+            Key.switchSpeed: SwitchSpeed.normal.rawValue,
         ])
     }
 
@@ -46,10 +46,10 @@ final class Settings {
         set { defaults.set(newValue, forKey: Key.movePointer) }
     }
 
-    var deciderConfig: DeciderConfig {
-        var config = DeciderConfig()
-        config.dwell = Double(max(100, defaults.integer(forKey: Key.dwellMilliseconds))) / 1000
-        return config
+    /// How quickly focus follows: dwell before switching and holds after input.
+    var switchSpeed: SwitchSpeed {
+        get { defaults.string(forKey: Key.switchSpeed).flatMap(SwitchSpeed.init(rawValue:)) ?? .normal }
+        set { defaults.set(newValue.rawValue, forKey: Key.switchSpeed) }
     }
 }
 

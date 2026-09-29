@@ -10,10 +10,13 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
         let name: String
     }
 
-    /// Frame rate while a switch could happen, and while the user is busy
-    /// typing or using the mouse (when no switch can happen anyway).
-    static let activeFPS = 12.0
-    static let heldFPS = 4.0
+    /// Capture runs at the camera's rate; analysis runs at `activeFPS` while
+    /// a switch could happen and `heldFPS` while the user types or uses the
+    /// mouse. Capture must be a multiple of analysis or frames get skipped
+    /// unevenly (15 fps capture with 12 fps analysis gave only 7.5 fps).
+    static let captureFPS = 30.0
+    static let activeFPS = 15.0
+    static let heldFPS = 5.0
 
     /// Called on the main actor with each analysed frame (nil = no face).
     /// Set before calling `start`.
@@ -109,7 +112,7 @@ final class CameraService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegat
         }
         session.commitConfiguration()
         configuredDeviceID = .some(deviceID)
-        limitFrameRate(device, fps: 15)
+        limitFrameRate(device, fps: Self.captureFPS)
     }
 
     private func limitFrameRate(_ device: AVCaptureDevice, fps: Double) {

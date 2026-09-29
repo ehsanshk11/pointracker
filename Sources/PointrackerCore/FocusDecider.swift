@@ -19,6 +19,40 @@ public struct DeciderConfig: Equatable, Sendable {
     public init() {}
 }
 
+/// User-facing presets trading responsiveness against accidental switches.
+public enum SwitchSpeed: String, CaseIterable, Sendable {
+    case fast
+    case normal
+    case relaxed
+
+    public var title: String {
+        switch self {
+        case .fast: return "Fast"
+        case .normal: return "Normal"
+        case .relaxed: return "Relaxed"
+        }
+    }
+
+    public var config: DeciderConfig {
+        var config = DeciderConfig()
+        switch self {
+        case .fast:
+            config.dwell = 0.15
+            config.cooldown = 0.3
+            config.mouseHold = 0.8
+            config.typingHold = 0.4
+        case .normal:
+            break
+        case .relaxed:
+            config.dwell = 0.5
+            config.cooldown = 0.6
+            config.mouseHold = 2.0
+            config.typingHold = 0.8
+        }
+        return config
+    }
+}
+
 public struct DeciderInput: Sendable {
     public var time: TimeInterval
     /// Nil when no face was found in the frame.
@@ -94,16 +128,13 @@ public struct FocusDecider: Sendable {
 
     public mutating func step(_ input: DeciderInput) -> DeciderOutput {
         let t = input.time
-        if let hold = Self.holdReason(
+        let hold = Self.holdReason(
             at: t,
             lastMouse: input.lastMouseActivity,
             lastKey: input.lastKeyActivity,
             mouseHold: config.mouseHold,
             typingHold: config.typingHold
-        ) {
-            candidate = nil
-            return .holding(hold)
-        }
+        )
 
         // Right after a switch the caller may not have caught up yet; trust
         // our own switch over a stale "current screen".
@@ -111,37 +142,47 @@ public struct FocusDecider: Sendable {
         let current = inCooldown ? (lastSwitchTarget ?? input.currentScreen) : input.currentScreen
 
         guard let classification = input.classification else {
-            return faceLost(at: t, current: current)
+            return faceLost(at: t, current: current, hold: hold)
         }
         lastFaceSeen = t
 
         if classification.isOutlier {
             candidate = nil
-            return .idle
+            return hold.map(DeciderOutput.holding) ?? .idle
         }
         guard let target = chooseTarget(classification, current: current), target != current else {
             candidate = nil
-            return .idle
+            return hold.map(DeciderOutput.holding) ?? .idle
         }
         if target != candidate {
             candidate = target
             candidateSince = t
         }
         candidateLastSeen = t
+        // While typing or using the mouse the dwell clock keeps running but
+        // never fires, so a user already facing the other screen gets focus
+        // the moment the hold ends instead of waiting a full dwell more.
+        if let hold {
+            return .holding(hold)
+        }
         return fireIfReady(target, at: t)
     }
 
     /// Turning far toward a screen can take the face out of the camera's
     /// view (e.g. a camera off to one side). If the challenger had already
     /// been seen for half the dwell, let the clock keep running briefly.
-    private mutating func faceLost(at t: TimeInterval, current: ScreenID?) -> DeciderOutput {
+    private mutating func faceLost(at t: TimeInterval, current: ScreenID?, hold: HoldReason?) -> DeciderOutput {
+        let idle = hold.map(DeciderOutput.holding) ?? .idle
         guard let target = candidate, target != current else {
             candidate = nil
-            return .idle
+            return idle
         }
         if let seen = lastFaceSeen, t - seen > config.faceLossGrace {
             candidate = nil
-            return .idle
+            return idle
+        }
+        if let hold {
+            return .holding(hold)
         }
         if candidateLastSeen - candidateSince >= config.dwell / 2 {
             return fireIfReady(target, at: t)
