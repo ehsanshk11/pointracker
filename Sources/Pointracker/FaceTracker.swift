@@ -59,7 +59,7 @@ final class FaceTracker {
     /// Runs the models on the Neural Engine where Vision allows it, which
     /// keeps them off the CPU cores.
     private static func preferNeuralEngine(_ request: VNRequest) {
-        guard let stages = try? request.supportedComputeStageDevices() else { return }
+        guard let stages = try? request.supportedComputeStageDevices else { return }
         for (stage, devices) in stages {
             let neuralEngine = devices.first { device in
                 if case .neuralEngine = device { return true }
